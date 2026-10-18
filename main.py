@@ -1,5 +1,6 @@
 import flet as ft
 import yt_dlp
+from download_support import DownloadCancelled, DownloadLog, runtime_options
 import threading
 import queue
 import asyncio
@@ -111,6 +112,7 @@ def format_bytes(bytes_num):
     return "0 B"
 
 def main(page: ft.Page):
+    download_log = DownloadLog()
     current_lang = get_init_lang()
     t_ptr = [I18N[current_lang]] 
 
@@ -141,7 +143,7 @@ def main(page: ft.Page):
     progress_bar = ft.ProgressBar(width=450, value=0, visible=False, color="blue")
     progress_percent = ft.Text("", size=12, weight="bold")
     progress_size = ft.Text("", size=12, color=ft.Colors.BLUE_GREY_400) 
-    status_text = ft.Text("", size=14, weight="bold")
+    status_text = ft.Text("", size=14, weight="bold", selectable=True)
     history_list = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True, spacing=10)
     
     quality_dropdown = ft.Dropdown()
@@ -317,12 +319,12 @@ def main(page: ft.Page):
                     download_btn.visible = True; pause_btn.visible = cancel_btn.visible = False
                     
                     err_txt = msg.get('content', t['status_stopped'])
-                    if len(err_txt) > 60: err_txt = err_txt[:57] + "..." 
-                    if "ffmpeg" in err_txt.lower() or "ffprobe" in err_txt.lower():
-                        err_txt = "缺少 FFmpeg (或需放在同一文件夹)，无法合并！"
-                        
+                    # Keep the full error visible and copyable until the next attempt.
+                    if msg['type'] == 'error':
+                        err_txt += f"\nLog: {download_log.path}"
                     status_text.value = f"❌ {err_txt}"
-                    page.update(); await asyncio.sleep(3); status_text.opacity = 0; page.update(); break
+                    page.update()
+                    break
             except queue.Empty: await asyncio.sleep(0.1)
 
     def backend_worker(link, save_dir, quality_key, limit_val):
@@ -332,7 +334,8 @@ def main(page: ft.Page):
         task_id = ''.join(random.choices(string.ascii_letters + string.digits, k=4))
 
         def hook(d):
-            if cancel_flag[0]: raise ValueError("USER_STOP")
+            current_file_path[0] = d.get('filename') or current_file_path[0]
+            if cancel_flag[0]: raise DownloadCancelled()
             if not pause_event.is_set(): pause_event.wait()
             if d['status'] == 'downloading':
                 current_file_path[0] = d.get('filename')
@@ -355,7 +358,10 @@ def main(page: ft.Page):
                 'format': q_map.get(quality_key, "bestvideo+bestaudio/best"), 
                 'progress_hooks': [hook],
                 'socket_timeout': 15, 
-                'retries': 3          
+                'retries': 3,
+                'noplaylist': True,
+                'logger': download_log,
+                **runtime_options(),
             }
             if quality_key == "audio": ydl_opts['postprocessors'] = [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}]
             
@@ -365,6 +371,8 @@ def main(page: ft.Page):
                 if limit_mb > 0: ydl_opts['ratelimit'] = int(limit_mb * 1024 * 1024) 
             except Exception: pass 
             
+            os.makedirs(save_dir, exist_ok=True)
+            download_log.debug(f'Download requested; quality={quality_key}; runtimes={list(ydl_opts.get("js_runtimes", {}))}')
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(link, download=True)
                 path = info.get('_filename')
@@ -380,12 +388,13 @@ def main(page: ft.Page):
 
                 mailbox.put({'type': 'success', 'info': {'title':info['title'],'thumbnail':info.get('thumbnail'),'resolution':res_text,'size':format_bytes(info.get('filesize_approx') or info.get('filesize')),'filepath':str(path)}})
         
-        except ValueError: 
+        except DownloadCancelled:
             if current_file_path[0]:
                 for f in glob.glob(f"{os.path.splitext(current_file_path[0])[0]}*"): 
                     if f.endswith((".part", ".ytdl", ".temp")): os.remove(f)
             mailbox.put({'type': 'cancelled'})
-        except Exception as e: 
+        except Exception as e:
+            download_log.error(str(e))
             mailbox.put({'type': 'error', 'content': str(e)}) 
 
     # --- Overlay UI ---
@@ -458,4 +467,5 @@ def main(page: ft.Page):
     
     page.add(ft.Stack([ft.Row([sidebar, main_content], expand=True), history_overlay, support_overlay, lang_overlay], expand=True))
 
-ft.run(main)
+if __name__ == "__main__":
+    ft.run(main)
