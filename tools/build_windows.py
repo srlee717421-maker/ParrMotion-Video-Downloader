@@ -26,11 +26,16 @@ def main():
     for name in ('ffmpeg.exe', 'ffprobe.exe'):
         found = root / name
         if not found.is_file():
-            located = shutil.which(name)
+            # Chocolatey's PATH entry may be a shim tied to the build machine.
+            # Copy the real package binary so the installer works elsewhere.
+            package = Path(os.environ.get('ChocolateyInstall', 'C:/ProgramData/chocolatey')) / 'lib' / 'ffmpeg' / 'tools'
+            packaged = sorted(package.rglob(name)) if package.is_dir() else []
+            located = str(packaged[0]) if packaged else shutil.which(name)
             if not located:
                 raise SystemExit(f'Missing {name}: put it beside main.py or add FFmpeg to PATH.')
             found = Path(located)
         tools[name] = found
+        print(f'Bundling {name}: {found}', flush=True)
     subprocess.run([
         sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean',
         '--onedir', '--windowed', '--name', 'ParrMotion', '--icon', 'logo.ico',
