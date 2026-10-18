@@ -113,6 +113,10 @@ python -m venv .venv
 
 生成文件为 `dist/ParrMotion-Setup-windows-x64.exe` 和 `dist/ParrMotion-windows-x64.zip`。
 Actions 会实际安装产物、检查捆绑运行时、启动桌面窗口并卸载。Linux 不能直接构建 Windows EXE。
+维护安装包 1.0.2 补齐 Flet 的 Material/Cupertino 图标资源，修复启动后 `icons.json` 缺失的错误页。
+构建会对比源码、便携 ZIP 和安装目录中的图标文件；Windows 验收通过截图 OCR 检查主界面的
+下载按钮、保存位置、画质和链接输入框，并故意移走图标文件确认错误页会被拒绝。
+`ParrMotion-desktop-verification` artifact 保存实际截图、OCR 文字和验收结果。
 日后刷新引擎可先运行 `python -m pip install --upgrade "yt-dlp[default,deno]"`，再重新构建。
 
 Windows 日志位于 `%LOCALAPPDATA%\ParrMotion\logs\download.log`；无法写入时退回临时目录，

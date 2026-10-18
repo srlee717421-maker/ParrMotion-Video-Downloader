@@ -2,7 +2,7 @@
 [Setup]
 AppId={{91949A39-5B33-4A39-B22F-31C663F24078}
 AppName=ParrMotion
-AppVersion=1.0.1
+AppVersion=1.0.2
 AppPublisher=ParrMotion
 DefaultDirName={localappdata}\Programs\ParrMotion
 DefaultGroupName=ParrMotion

@@ -1,6 +1,7 @@
 """Build a Windows portable archive and installer from the repository root."""
 from pathlib import Path
 import hashlib
+from importlib.resources import files
 import os
 import shutil
 import subprocess
@@ -39,11 +40,20 @@ def main():
     subprocess.run([
         sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean',
         '--onedir', '--windowed', '--name', 'ParrMotion', '--icon', 'logo.ico',
+        '--collect-data', 'flet',
         '--collect-all', 'flet_desktop', '--collect-all', 'yt_dlp',
         '--collect-all', 'yt_dlp_ejs', '--copy-metadata', 'yt-dlp',
         '--copy-metadata', 'yt-dlp-ejs', 'main.py',
     ], check=True)
     output = root / 'dist' / 'ParrMotion'
+    # Flet loads these lazily when the page first uses an icon. A desktop
+    # window can appear successfully even when these resources are absent.
+    for relative in ('controls/material/icons.json', 'controls/cupertino/cupertino_icons.json'):
+        source = files('flet').joinpath(relative).read_bytes()
+        bundled = output / '_internal' / 'flet' / relative
+        if not bundled.is_file() or bundled.read_bytes() != source:
+            raise SystemExit(f'Flet runtime resource missing or changed: {bundled}')
+        print(f'Verified bundled Flet resource: {relative}', flush=True)
     for name, source in tools.items():
         shutil.copy2(source, output / name)
     shutil.copy2(root / 'LICENSE', output / 'LICENSE.txt')
