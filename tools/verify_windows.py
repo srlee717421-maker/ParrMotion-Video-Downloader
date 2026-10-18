@@ -69,6 +69,8 @@ def check_desktop(install, directory, evidence, tesseract, expect_error=False):
     user32 = ctypes.WinDLL('user32', use_last_error=True)
     user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
     user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+    user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+    user32.MoveWindow.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.BOOL]
     label = 'missing-icons-negative-control' if expect_error else 'installed-desktop'
     screenshot = evidence / f'{label}.png'
     environment = os.environ.copy()
@@ -90,8 +92,15 @@ def check_desktop(install, directory, evidence, tesseract, expect_error=False):
             handle = windows[-1]
             user32.ShowWindow(handle, 9)
             user32.SetForegroundWindow(handle)
+            user32.MoveWindow(handle, 0, 0, min(1200, user32.GetSystemMetrics(0)),
+                              min(850, user32.GetSystemMetrics(1)), True)
             time.sleep(1)
-            ImageGrab.grab(window=handle).save(screenshot)
+            # Capture pixels from the visible desktop: PrintWindow can return
+            # a black surface for the GPU-rendered Flutter client.
+            bounds = wintypes.RECT()
+            user32.GetWindowRect(handle, ctypes.byref(bounds))
+            ImageGrab.grab(bbox=(bounds.left, bounds.top, bounds.right, bounds.bottom),
+                           all_screens=True).save(screenshot)
             result = subprocess.run([tesseract, str(screenshot), 'stdout', '-l', 'eng', '--psm', '11'],
                                     capture_output=True, text=True, encoding='utf-8',
                                     env=environment, check=True, timeout=30)
