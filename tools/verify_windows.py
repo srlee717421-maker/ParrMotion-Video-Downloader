@@ -27,6 +27,7 @@ def app_windows(process_ids):
     user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
     user32.EnumWindows.argtypes = [callback_type, wintypes.LPARAM]
     user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
     found = []
 
     @callback_type
@@ -35,12 +36,16 @@ def app_windows(process_ids):
         process_id = wintypes.DWORD()
         user32.GetWindowTextW(handle, title, len(title))
         user32.GetWindowThreadProcessId(handle, ctypes.byref(process_id))
-        if process_id.value in process_ids and user32.IsWindowVisible(handle) and 'ParrMotion' in title.value:
-            found.append(handle)
+        if process_id.value in process_ids and user32.IsWindowVisible(handle):
+            bounds = wintypes.RECT()
+            user32.GetWindowRect(handle, ctypes.byref(bounds))
+            area = (bounds.right - bounds.left) * (bounds.bottom - bounds.top)
+            if area > 100_000:
+                found.append((area, handle))
         return True
 
     user32.EnumWindows(inspect_window, 0)
-    return found
+    return [handle for _, handle in sorted(found)]
 
 
 def check_assets(install, portable):
