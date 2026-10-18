@@ -447,7 +447,7 @@ def main(page: ft.Page):
             search_tile, history_tile, ft.Container(expand=True),
             lang_selector_btn, 
             ft.Column([
-                ft.Text("Version: v1.0.0", size=10, color=ft.Colors.BLUE_GREY_300),
+                ft.Text("Version: v1.0.2", size=10, color=ft.Colors.BLUE_GREY_300),
                 ft.Text("Author: srlee", size=12, weight="bold", color=ft.Colors.BLUE_GREY_400),
                 ft.Text("Contact: srlee717421@gmail.com", size=10, color=ft.Colors.BLUE_GREY_300),
                 ft.Text("Powered by yt-dlp", size=10, italic=True, color=ft.Colors.BLUE_GREY_300)

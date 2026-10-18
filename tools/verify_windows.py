@@ -79,6 +79,7 @@ def check_desktop(install, directory, evidence, tesseract, expect_error=False):
     environment['LOCALAPPDATA'] = str(Path(directory) / label)
     process = subprocess.Popen([str(install / 'ParrMotion.exe')], cwd=directory, env=environment)
     consecutive = 0
+    text = ''
     try:
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
@@ -101,11 +102,17 @@ def check_desktop(install, directory, evidence, tesseract, expect_error=False):
             user32.GetWindowRect(handle, ctypes.byref(bounds))
             ImageGrab.grab(bbox=(bounds.left, bounds.top, bounds.right, bounds.bottom),
                            all_screens=True).save(screenshot)
-            result = subprocess.run([tesseract, str(screenshot), 'stdout', '-l', 'eng', '--psm', '11'],
-                                    capture_output=True, text=True, encoding='utf-8',
-                                    env=environment, check=True, timeout=30)
-            (evidence / f'{label}-ocr.txt').write_text(result.stdout, encoding='utf-8')
-            text = re.sub(r'\s+', ' ', result.stdout).casefold()
+            # Sparse mode reads the sidebar and fields; automatic layout also
+            # recognizes white labels on the filled download button.
+            recognized = []
+            for mode in ('11', '3'):
+                result = subprocess.run([tesseract, str(screenshot), 'stdout', '-l', 'eng', '--psm', mode],
+                                        capture_output=True, text=True, encoding='utf-8',
+                                        env=environment, check=True, timeout=30)
+                recognized.append(result.stdout)
+            combined = '\n'.join(recognized)
+            (evidence / f'{label}-ocr.txt').write_text(combined, encoding='utf-8')
+            text = re.sub(r'\s+', ' ', combined).casefold()
             errors = [phrase for phrase in ERROR_TEXT if phrase in text]
             if errors:
                 if expect_error:
@@ -122,7 +129,7 @@ def check_desktop(install, directory, evidence, tesseract, expect_error=False):
                     return
             else:
                 consecutive = 0
-        raise RuntimeError(f'Expected rendered UI did not appear; see {screenshot} and OCR evidence.')
+        raise RuntimeError(f'Expected rendered UI did not appear; OCR: {text}; see {screenshot}.')
     finally:
         subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
